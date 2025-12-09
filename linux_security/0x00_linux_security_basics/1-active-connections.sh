@@ -1,2 +1,2 @@
 #!/bin/bash
-sudo ss -atp --numeric
+sudo ss -atpn
