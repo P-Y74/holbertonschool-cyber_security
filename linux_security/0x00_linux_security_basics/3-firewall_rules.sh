@@ -1,2 +1,2 @@
 #!/bin/bash
-sudo ufw show
+sudo ufw status verbose
