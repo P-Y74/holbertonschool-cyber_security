@@ -1,2 +1,2 @@
 #!/bin/bash
-ufw show
+sudo ufw show
