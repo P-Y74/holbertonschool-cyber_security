@@ -1,2 +1,2 @@
 #!/bin/bash
-sudo ufw status verbose
+sudo iptables -t security -L -v
