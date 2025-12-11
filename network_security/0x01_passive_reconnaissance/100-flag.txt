@@ -1,1 +1,2 @@
+#!/bin/bash
 Holberton Sec Lab - b947d84af9ff86694c232cc6b4011e0a
