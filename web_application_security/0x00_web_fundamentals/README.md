@@ -23,7 +23,7 @@ The main entry point provided is:
 
 ```
 
-[http://web0x00.hbtn/login](http://web0x00.hbtn/login)
+http://web0x00.hbtn/login
 
 ````
 
