@@ -1,18 +1,19 @@
 #!/bin/bash
 INPUT="$1"
-KEY="_"
 
-ENCODED="${INPUT#\{xor\}}"
+python3 - <<'PY' "$INPUT"
+from base64 import b64decode
+import sys
 
-DECODED=$(echo "$ENCODED" | base64 --decode)
+# Get argument and remove {xor} prefix
+raw = sys.argv[1].replace("{xor}", "")
 
-RESULT=""
-KEY_LEN=${#KEY}
+# Decode base64
+data = b64decode(raw)
 
-for ((i=0; i<${#DECODED}; i++)); do
-    d=$(printf '%d' "'${DECODED:$i:1}")
-    k=$(printf '%d' "'${KEY:$((i % KEY_LEN)):1}")
-    RESULT+=$(printf "\\$(printf '%03o' $((d ^ k)))")
-done
+# XOR with WebSphere legacy key (0x5f = '_')
+decoded = bytes(byte ^ 0x5F for byte in data)
 
-echo "$RESULT"
+# Print result
+print(decoded.decode("utf-8"))
+PY
