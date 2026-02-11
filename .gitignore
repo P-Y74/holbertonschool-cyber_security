@@ -1,2 +1,5 @@
 .vscode/settings.json
 .gitignore
+web_application_security/0x04_content_discovery/dns_wordlist.txt
+web_application_security/0x04_content_discovery/infrared.txt
+web_application_security/0x04_content_discovery/list_fuzz.txt
