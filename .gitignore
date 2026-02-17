@@ -8,3 +8,5 @@ web_application_security/0x05_upload_vulnerabilities/test.png
 web_application_security/0x05_upload_vulnerabilities/payload.php
 web_application_security/0x05_upload_vulnerabilities/pika.png
 web_application_security/0x05_upload_vulnerabilities/test2.png
+web_application_security/0x05_upload_vulnerabilities/bigpayload.php
+web_application_security/0x05_upload_vulnerabilities/small.php
