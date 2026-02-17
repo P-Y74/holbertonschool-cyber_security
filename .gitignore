@@ -3,4 +3,6 @@
 web_application_security/0x04_content_discovery/dns_wordlist.txt
 web_application_security/0x04_content_discovery/infrared.txt
 web_application_security/0x04_content_discovery/list_fuzz.txt
+
+web_application_security/0x05_upload_vulnerabilities/test.png
 web_application_security/0x05_upload_vulnerabilities/payload.php
