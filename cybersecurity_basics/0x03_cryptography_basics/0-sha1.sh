@@ -1,1 +1,1 @@
-echo "$1" | sha1sum | cut -d ' ' -f1 > 0_hash.txt
+echo -n "$1" | sha1sum | awk '{print $1}' > 0_hash.txt
