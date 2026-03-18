@@ -1,2 +1,2 @@
 #!/bin/bash
-sudo nmap -sT -p $2 --exclude-ports $3 $1
+sudo nmap -sW -p $2 --exclude-ports $3 $1
