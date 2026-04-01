@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 """Read and write a target string in the heap of a running process.
 
 This script locates the heap of a process using /proc/<pid>/maps,
