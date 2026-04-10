@@ -69,7 +69,7 @@ Projects included:
 - `0x07_file_inclusion`
 - `0x09_command_injection`
 - `0x0b_web_application_fast_incident_response`
-- `0x0c_web_application_foresics`
+- `0x0c_web_application_forensics`
 
 ## Learning Objectives
 
