@@ -6,14 +6,14 @@ require "json"
 
 def post_request(url, body_params)
     uri = URI(url)
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = (uri.scheme == "https")
 
-    req = Net::HTTP::Post.new(uri)
+    req = Net::HTTP::Post.new(uri.request_uri)
     req["Content-Type"] = "application/json"
     req.body = body_params.to_json
 
-    res = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == "https") do |http|
-        http.request(req)
-    end
+    res = http.request(req)
 
     puts "Response status: #{res.code} #{res.message}"
     puts "Response body:"
