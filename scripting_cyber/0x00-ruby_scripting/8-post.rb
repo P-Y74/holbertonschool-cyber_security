@@ -21,7 +21,7 @@ def post_request(url, body_params)
     begin
         data = JSON.parse(res.body)
         puts JSON.pretty_generate(data)
-    rescue JSON::ParseError
-        puts response.body
+    rescue JSON::ParserError
+        puts res.body
     end
 end
