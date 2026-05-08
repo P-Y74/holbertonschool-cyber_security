@@ -13,6 +13,7 @@ end
 parser.on('-l', '--list', 'List all tasks') do
     if File.exist?("tasks.txt")
         File.readlines("tasks.txt").each_with_index do |task, index|
+            puts "Tasks:"
             puts "#{index + 1}. #{task.strip}"
         end
     else
