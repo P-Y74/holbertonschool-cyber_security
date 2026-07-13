@@ -34,7 +34,7 @@ The project follows the structure required by Holberton School:
 holbertonschool-cyber_security/
 └── persistence_in_windows/
     └── 0x00_acces_persistence_techniques/
-````
+```
 
 ## Learning Objectives
 
@@ -177,3 +177,199 @@ Important detection and mitigation points include:
 | Tactic      | Technique                                        | ID        |
 | ----------- | ------------------------------------------------ | --------- |
 | Persistence | Boot or Logon Autostart Execution: Startup Items | T1547.001 |
+
+---
+
+# Task 1 - Persistence Using Registry Autorun
+
+## Objective
+
+The goal of this task was to investigate how attackers can use Windows Registry autorun keys to maintain persistence.
+
+Registry Run keys allow programs or scripts to execute automatically when a user logs in. This makes them a common persistence mechanism used by both legitimate software and malware.
+
+The task required identifying a suspicious autorun registry entry, analyzing the script it executed, extracting the hidden flag, and cleaning up the persistence entry afterward.
+
+## Technique Overview
+
+Windows Registry Run keys are commonly used to launch applications during user logon.
+
+Common autorun locations include:
+
+```text
+Current user autorun key:
+HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run
+```
+
+```text
+Local machine autorun key:
+HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run
+```
+
+A value stored under one of these keys can point to an executable, script, or command line that will be executed automatically at logon.
+
+From a security perspective, these keys are important to monitor because attackers may use them to persist across reboots and user sessions.
+
+## Investigation Steps
+
+I used Sysinternals Autoruns to inspect logon-related persistence entries.
+
+In the `Logon` tab, I identified a suspicious autorun entry named:
+
+```text
+flag2
+```
+
+The entry was located under the following registry path:
+
+```text
+HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run
+```
+
+Autoruns showed that the registry value launched PowerShell with an execution policy bypass:
+
+```text
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -ep bypass -File "C:\Program Files (x86)\WindowsPowerShell\Modules\PackageManagement\1.0.0.1\UserProfile.ps1"
+```
+
+This indicated that the persistence mechanism was based on a Registry Run key executing a PowerShell script at user logon.
+
+## Registry Entry Analysis
+
+The suspicious autorun value was:
+
+```text
+Value name:
+flag2
+```
+
+The associated command executed:
+
+```text
+powershell.exe -ep bypass -File "C:\Program Files (x86)\WindowsPowerShell\Modules\PackageManagement\1.0.0.1\UserProfile.ps1"
+```
+
+The use of `-ep bypass` was notable because it allows the script to run while bypassing the current PowerShell execution policy for that process.
+
+I opened the referenced script for analysis:
+
+```text
+C:\Program Files (x86)\WindowsPowerShell\Modules\PackageManagement\1.0.0.1\UserProfile.ps1
+```
+
+## Script Analysis
+
+The PowerShell script contained a command writing a placeholder value to a flag file:
+
+```powershell
+Set-Content -Path "C:\Users\SuperAdministrator\Desktop\flags\flag02.txt" -Value "Holberton{xxx}"
+```
+
+However, the interesting part of the script was an array of hexadecimal values followed by an ASCII decoding instruction:
+
+```powershell
+$a = 0x48,0x6f,0x6c,0x62,0x65,0x72,0x74,0x6f,0x6e, ...
+[System.Text.Encoding]::ASCII.GetString($a) | Write-Output
+```
+
+Instead of relying on the placeholder value written to `flag02.txt`, I decoded the hexadecimal array using PowerShell.
+
+This revealed the actual hidden flag, which was then saved in the required file:
+
+```text
+1-flag.txt
+```
+
+## Execution Policy Observation
+
+When attempting to run the script manually, PowerShell returned an execution policy error:
+
+```text
+running scripts is disabled on this system
+```
+
+This happened because the script was executed directly without the same bypass option used by the autorun entry.
+
+The registry value used the following option:
+
+```text
+-ep bypass
+```
+
+This confirmed that the persistence entry was intentionally configured to execute the script despite local PowerShell execution policy restrictions.
+
+## Cleanup
+
+After extracting the flag and validating the task, I removed the suspicious autorun value from the registry.
+
+I used the following registry location:
+
+```text
+HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run
+```
+
+Only the suspicious value was removed:
+
+```text
+flag2
+```
+
+The full `Run` key was not deleted, because it may contain legitimate autorun entries.
+
+After refreshing Autoruns, the `flag2` persistence entry no longer appeared, confirming that the registry-based persistence mechanism had been removed.
+
+## Result
+
+The persistence mechanism was successfully identified, analyzed, and cleaned up.
+
+The identified persistence mechanism was:
+
+```text
+Registry Run Key Persistence
+```
+
+The suspicious registry location was:
+
+```text
+HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run
+```
+
+The suspicious value was:
+
+```text
+flag2
+```
+
+The script executed by the registry value was:
+
+```text
+C:\Program Files (x86)\WindowsPowerShell\Modules\PackageManagement\1.0.0.1\UserProfile.ps1
+```
+
+The hidden flag was extracted by decoding the hexadecimal ASCII array inside the PowerShell script and saved in:
+
+```text
+1-flag.txt
+```
+
+## Security Takeaways
+
+This task demonstrates how Registry Run keys can be abused to maintain persistence on Windows systems.
+
+From a defensive perspective, autorun registry locations should be regularly reviewed because they are commonly used by malware to execute code when a user logs in.
+
+Important detection and mitigation points include:
+
+* Monitor changes to Registry Run keys.
+* Review autorun entries with tools such as Autoruns.
+* Investigate suspicious PowerShell command lines.
+* Pay attention to execution policy bypass arguments such as `-ep bypass`.
+* Validate scripts executed from unusual or misleading paths.
+* Remove only suspicious registry values, not the entire registry key.
+* Correlate autorun registry changes with suspicious file creation or user activity.
+
+## MITRE ATT&CK Mapping
+
+| Tactic      | Technique                                                             | ID        |
+| ----------- | --------------------------------------------------------------------- | --------- |
+| Persistence | Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder | T1547.001 |
