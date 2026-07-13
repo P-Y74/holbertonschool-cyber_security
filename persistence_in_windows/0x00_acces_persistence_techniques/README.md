@@ -373,3 +373,139 @@ Important detection and mitigation points include:
 | Tactic      | Technique                                                             | ID        |
 | ----------- | --------------------------------------------------------------------- | --------- |
 | Persistence | Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder | T1547.001 |
+
+---
+
+# Task 2 - Persistence Using Services
+
+## Objective
+
+The goal of this task was to investigate how Windows Services can be abused as a persistence mechanism.
+
+Windows Services can be configured to start automatically during system boot, allowing programs to run in the background without direct user interaction. This makes services a powerful persistence technique when misused by an attacker.
+
+The task required identifying a suspicious service, analyzing its metadata, extracting a hidden Base64-encoded flag, and cleaning up the service afterward.
+
+## Technique Overview
+
+Windows Services are background processes managed by the Service Control Manager.
+
+Legitimate services are commonly used by the operating system and installed applications. However, attackers can abuse this feature by creating or modifying services so that malicious programs execute automatically when the system starts.
+
+Services can be inspected using tools such as:
+
+```text
+services.msc
+```
+
+```text
+Task Manager > Services
+```
+
+```text
+Sysinternals Autoruns > Services
+```
+
+From a security perspective, services should be monitored because they can provide persistent execution with elevated privileges depending on their configuration.
+
+## Investigation Steps
+
+I started by opening Task Manager and checking the `Services` tab.
+
+From there, I opened the Windows Services management console:
+
+```text
+services.msc
+```
+
+While reviewing the list of services, I identified a suspicious service named:
+
+```text
+flag3
+```
+
+The service description contained a message indicating that access was still maintained on the system and that the flag was Base64-encoded.
+
+I also confirmed the same service entry in Sysinternals Autoruns under the `Services` tab.
+
+## Service Analysis
+
+The suspicious service was identified as:
+
+```text
+flag3
+```
+
+Its description contained a Base64-encoded value.
+
+This confirmed that the service itself was being used as part of the persistence exercise. Instead of hiding the flag in a script or executable, the relevant information was stored directly in the service metadata.
+
+## Base64 Decoding
+
+The service description indicated that the flag was Base64-encoded.
+
+To decode it safely, a local PowerShell command can be used:
+
+```powershell
+[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String("<base64_value>"))
+```
+
+After decoding the Base64 string, I extracted the expected flag and saved it in:
+
+```text
+2-flag.txt
+```
+
+## Cleanup
+
+After extracting the flag and validating the task, I removed the suspicious service using Autoruns.
+
+I refreshed Autoruns afterward to confirm that the `flag3` service entry no longer appeared.
+
+This cleanup step was important to restore the system state and remove the persistence mechanism.
+
+## Result
+
+The persistence mechanism was successfully identified, analyzed, and removed.
+
+The identified persistence mechanism was:
+
+```text
+Windows Service Persistence
+```
+
+The suspicious service was:
+
+```text
+flag3
+```
+
+The hidden flag was extracted by decoding the Base64 value found in the service description and saved in:
+
+```text
+2-flag.txt
+```
+
+The suspicious service was then removed from the system.
+
+## Security Takeaways
+
+This task demonstrates how Windows Services can be abused to maintain persistence on a system.
+
+From a defensive perspective, services should be regularly reviewed because attackers may create services that run automatically during boot and remain hidden among legitimate system services.
+
+Important detection and mitigation points include:
+
+* Regularly inspect installed services.
+* Review service names, descriptions, paths, and startup types.
+* Investigate services with suspicious or unusual descriptions.
+* Use Autoruns to identify non-standard service persistence.
+* Monitor service creation events.
+* Remove unauthorized services after investigation.
+* Avoid decoding or submitting suspicious data to external websites when local tools can be used.
+
+## MITRE ATT&CK Mapping
+
+| Tactic      | Technique                                        | ID        |
+| ----------- | ------------------------------------------------ | --------- |
+| Persistence | Create or Modify System Process: Windows Service | T1543.003 |
