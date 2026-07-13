@@ -509,3 +509,193 @@ Important detection and mitigation points include:
 | Tactic      | Technique                                        | ID        |
 | ----------- | ------------------------------------------------ | --------- |
 | Persistence | Create or Modify System Process: Windows Service | T1543.003 |
+
+---
+
+# Task 3 - Persistence Using Scheduled Tasks
+
+## Objective
+
+The goal of this task was to investigate how Windows Scheduled Tasks can be abused as a persistence mechanism.
+
+Scheduled tasks allow programs or scripts to run automatically based on specific triggers, such as system startup, user logon, time intervals, or system events. Attackers can abuse this legitimate Windows feature to execute malicious code persistently without direct user interaction.
+
+The task required locating a scheduled task, inspecting its configuration, extracting the flag from its description, and removing the task afterward.
+
+## Technique Overview
+
+Windows Task Scheduler is a built-in automation feature used to run tasks based on defined triggers.
+
+Common persistence-related triggers include:
+
+```text
+At system startup
+````
+
+```text
+At user logon
+```
+
+```text
+On a schedule
+```
+
+```text
+On a specific event
+```
+
+From a security perspective, scheduled tasks are important to monitor because they can be used to execute scripts, binaries, or commands automatically and persist across reboots.
+
+Scheduled tasks can be inspected using:
+
+```text
+Task Scheduler GUI
+```
+
+```powershell
+Get-ScheduledTask
+```
+
+```powershell
+Get-ScheduledTaskInfo
+```
+
+## Investigation Steps
+
+I opened the Windows Task Scheduler and navigated to:
+
+```text
+Task Scheduler Library
+```
+
+Inside the library, I identified a suspicious scheduled task named:
+
+```text
+flag04
+```
+
+Although the task name was `flag04`, it was used for this project task and the extracted value was saved in the required file:
+
+```text
+3-flag.txt
+```
+
+The task was configured with the following trigger:
+
+```text
+At system startup
+```
+
+This confirmed that the task was designed to run automatically when the system starts, which is a common persistence technique.
+
+## PowerShell Validation
+
+To respect the task requirements and validate the finding with PowerShell, I inspected the scheduled task using the following command:
+
+```powershell
+Get-ScheduledTask -TaskName "flag04"
+```
+
+To retrieve the task description, where the flag was hidden, I used:
+
+```powershell
+(Get-ScheduledTask -TaskName "flag04").Description
+```
+
+The description contained the expected flag for the challenge.
+
+I also checked the task triggers with:
+
+```powershell
+(Get-ScheduledTask -TaskName "flag04").Triggers
+```
+
+The output confirmed that the scheduled task was triggered at system startup.
+
+To inspect the action configured for the task, I used:
+
+```powershell
+(Get-ScheduledTask -TaskName "flag04").Actions
+```
+
+This allowed me to review what the scheduled task was configured to execute.
+
+Finally, I checked execution-related information with:
+
+```powershell
+Get-ScheduledTaskInfo -TaskName "flag04"
+```
+
+The task status showed that it was ready and that the last execution completed successfully.
+
+## Cleanup
+
+After extracting the flag and validating the persistence mechanism, I removed the suspicious scheduled task.
+
+The task was deleted using PowerShell:
+
+```powershell
+Unregister-ScheduledTask -TaskName "flag04" -Confirm:$false
+```
+
+I then verified that the task no longer existed:
+
+```powershell
+Get-ScheduledTask | Where-Object {
+    $_.TaskName -eq "flag04"
+}
+```
+
+No result was returned, confirming that the scheduled task had been successfully removed.
+
+## Result
+
+The persistence mechanism was successfully identified, analyzed, and removed.
+
+The identified persistence mechanism was:
+
+```text
+Scheduled Task Persistence
+```
+
+The suspicious scheduled task was:
+
+```text
+flag04
+```
+
+The trigger type was:
+
+```text
+At system startup
+```
+
+The flag was found in the scheduled task description and saved in:
+
+```text
+3-flag.txt
+```
+
+The scheduled task was then removed from the system.
+
+## Security Takeaways
+
+This task demonstrates how scheduled tasks can be abused to maintain persistence on Windows systems.
+
+From a defensive perspective, scheduled tasks should be regularly reviewed because attackers may use them to execute code automatically during startup, logon, or other system events.
+
+Important detection and mitigation points include:
+
+* Review scheduled tasks regularly.
+* Investigate tasks with unusual names, descriptions, actions, or authors.
+* Monitor tasks triggered at system startup or user logon.
+* Inspect task actions to identify suspicious scripts or binaries.
+* Use PowerShell or Task Scheduler GUI to validate task configuration.
+* Remove unauthorized scheduled tasks after investigation.
+* Correlate scheduled task creation with suspicious user or process activity.
+
+## MITRE ATT&CK Mapping
+
+| Tactic      | Technique                          | ID        |
+| ----------- | ---------------------------------- | --------- |
+| Persistence | Scheduled Task/Job: Scheduled Task | T1053.005 |
