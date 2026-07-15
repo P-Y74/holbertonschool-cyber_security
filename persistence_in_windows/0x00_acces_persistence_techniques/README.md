@@ -699,3 +699,216 @@ Important detection and mitigation points include:
 | Tactic      | Technique                          | ID        |
 | ----------- | ---------------------------------- | --------- |
 | Persistence | Scheduled Task/Job: Scheduled Task | T1053.005 |
+
+---
+
+# Task 4 - Persistence Using BITSAdmin
+
+## Objective
+
+The goal of this task was to study how the Background Intelligent Transfer Service (BITS) can be abused as a persistence mechanism on Windows systems.
+
+BITS is a legitimate Windows service used to transfer files in the background. It is commonly used by Windows Update and other system components to download or upload data efficiently, even when network conditions are unstable.
+
+From an attacker perspective, this feature can be abused to download a payload in the background and maintain access by recreating or retrying jobs under specific conditions.
+
+For this task, the focus was educational. The payload concept was treated as a benign test payload used only to simulate attacker behavior in a controlled lab environment.
+
+## Technique Overview
+
+BITS jobs are managed by the Background Intelligent Transfer Service. They can be created, listed, resumed, completed, or removed using tools such as:
+
+```text
+bitsadmin
+```
+
+or PowerShell cmdlets related to BITS transfers.
+
+A BITS job can be configured to download a file from a remote or local source and store it on the target system. Attackers may abuse this behavior because BITS:
+
+* Is a legitimate Windows component.
+* Runs in the background.
+* Can survive temporary network interruptions.
+* Can resume interrupted transfers.
+* May appear less suspicious than custom download tools.
+* Can be combined with other persistence mechanisms.
+
+BITS alone is mainly a transfer mechanism. Persistence becomes more effective when BITS is combined with another mechanism, such as a scheduled task or a monitoring script that recreates the job if it is removed.
+
+## Lab Scenario
+
+In a controlled lab scenario, an attacker could abuse BITSAdmin to create a background download job that retrieves a payload.
+
+For ethical and educational purposes, the payload should be harmless. A safe example would be a test script or text file that writes a marker file locally instead of performing any malicious action.
+
+The intended workflow is:
+
+```text
+1. Enumerate existing BITS jobs.
+2. Create a new BITS download job.
+3. Configure the job to download a benign test payload.
+4. Complete or trigger the job.
+5. Use a checker script to monitor whether the job still exists.
+6. Automate the checker with a scheduled task.
+7. Review Windows logs for detection indicators.
+8. Remove the BITS job and related persistence artifacts.
+```
+
+## BITS Job Enumeration
+
+Before creating or analyzing a BITS job, existing jobs should be enumerated.
+
+This can be done with:
+
+```cmd
+bitsadmin /list /allusers /verbose
+```
+
+This command helps identify existing BITS jobs and review useful information such as:
+
+* Job name
+* Owner
+* State
+* Remote URL
+* Local destination path
+* Error count
+* Transfer status
+
+From a defensive perspective, unusual BITS jobs should be investigated, especially if they download files from unknown locations or write to suspicious directories.
+
+## Controlled BITS Persistence Concept
+
+The persistence concept for this task is based on abusing a trusted Windows feature to retrieve a payload in the background.
+
+A safe lab demonstration would use:
+
+```text
+Job type:
+Download job
+```
+
+```text
+Payload type:
+Benign test payload
+```
+
+```text
+Purpose:
+Simulate how an attacker could stage a file using BITS
+```
+
+The BITS job itself is not necessarily enough to guarantee full persistence. However, it can be combined with a scheduled task or checker script that monitors the job and recreates it if removed.
+
+This demonstrates how attackers may chain legitimate Windows features together to maintain access.
+
+## Checker Script Concept
+
+The task also required the concept of a checker script.
+
+The purpose of the checker script is to verify whether the expected BITS job exists. If the job has been removed, the script could recreate it.
+
+In a defensive learning context, this helps demonstrate how persistence can be layered:
+
+```text
+Scheduled Task
+   ↓
+PowerShell checker script
+   ↓
+BITS job verification
+   ↓
+BITS job recreation if missing
+```
+
+This combination makes the persistence more resilient because removing only the BITS job may not be enough if another mechanism recreates it.
+
+## Detection and Analysis
+
+BITS activity can be investigated using Windows Event Viewer.
+
+Relevant logs include:
+
+```text
+Event Viewer
+└── Applications and Services Logs
+    └── Microsoft
+        └── Windows
+            └── Bits-Client
+                └── Operational
+```
+
+Suspicious indicators may include:
+
+* Unexpected BITS jobs.
+* Jobs created by unusual users.
+* Downloads from unknown or external locations.
+* Files written to suspicious paths.
+* Repeated job creation after deletion.
+* BITS activity followed by script or binary execution.
+* Correlation with scheduled task creation.
+
+Additional tools such as Autoruns can also help identify related persistence mechanisms, especially if a scheduled task or startup entry is used to recreate the BITS job.
+
+## Cleanup
+
+After the analysis, the suspicious BITS job should be removed.
+
+A BITS job can be deleted with:
+
+```cmd
+bitsadmin /cancel <job_name>
+```
+
+After removal, the job list should be checked again:
+
+```cmd
+bitsadmin /list /allusers /verbose
+```
+
+If a checker script or scheduled task was created as part of the lab, those artifacts should also be removed.
+
+This is important because persistence mechanisms are often layered. Removing only one component may not fully restore the system.
+
+## Result
+
+This task demonstrated how BITSAdmin can be abused as part of a Windows persistence strategy.
+
+The key idea is that BITS is a legitimate Windows transfer service, but attackers can misuse it to download payloads in the background and combine it with scheduled tasks or checker scripts for persistence.
+
+The identified persistence concept was:
+
+```text
+BITSAdmin-based persistence
+```
+
+The supporting mechanism was:
+
+```text
+Checker script and scheduled task concept
+```
+
+No flag was required for this task. The objective was to understand, document, detect, and clean up the persistence technique.
+
+## Security Takeaways
+
+This task highlights how trusted Windows components can be abused for persistence.
+
+From a defensive perspective, BITS activity should be monitored because attackers may use it to download payloads while blending in with legitimate system behavior.
+
+Important detection and mitigation points include:
+
+* Monitor BITS job creation and modification.
+* Review BITS Client Operational logs.
+* Investigate jobs created by unusual users.
+* Correlate BITS activity with scheduled task creation.
+* Look for repeated recreation of deleted BITS jobs.
+* Restrict unnecessary script execution.
+* Monitor suspicious download destinations.
+* Remove all related artifacts during cleanup, not only the BITS job.
+
+## MITRE ATT&CK Mapping
+
+| Tactic          | Technique                          | ID        |
+| --------------- | ---------------------------------- | --------- |
+| Persistence     | BITS Jobs                          | T1197     |
+| Defense Evasion | BITS Jobs                          | T1197     |
+| Persistence     | Scheduled Task/Job: Scheduled Task | T1053.005 |
